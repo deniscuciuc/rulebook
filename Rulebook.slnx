@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Rulebook.Abstractions/Rulebook.Abstractions.csproj" />
+    <Project Path="src/Rulebook/Rulebook.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Rulebook.Docs.Snippets/Rulebook.Docs.Snippets.csproj" />
+    <Project Path="tests/Rulebook.Benchmarks/Rulebook.Benchmarks.csproj" />
+    <Project Path="tests/Rulebook.UnitTests/Rulebook.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/examples/">
+    <Project Path="examples/Rulebook.Examples.Console/Rulebook.Examples.Console.csproj" />
+  </Folder>
+</Solution>
