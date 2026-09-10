@@ -2,20 +2,61 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
 jobs:
-  build-and-test:
+  format:
+    name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: '10.x'
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-fmt-${{ hashFiles('Directory.Packages.props') }}
+          restore-keys: nuget-fmt-
+      - run: dotnet restore
+      - run: dotnet format --verify-no-changes --no-restore
+
+  build-and-test:
+    name: Build & test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is not redundant: the expression parser and the hash-based bucketer are
+        # the kind of code that quietly picks up a locale or an endianness assumption.
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # MinVer needs the full history to compute a version.
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x'
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ matrix.os }}-${{ hashFiles('Directory.Packages.props') }}
+          restore-keys: nuget-${{ matrix.os }}-
 
       - name: Restore
         run: dotnet restore
@@ -24,17 +65,40 @@ jobs:
         run: dotnet build --no-restore --configuration Release
 
       - name: Test
-        run: |
-          dotnet test --no-build --configuration Release \
-            --verbosity normal \
-            --logger "trx;LogFileName=results.trx"
+        run: >-
+          dotnet test --no-build --configuration Release
+          --collect:"XPlat Code Coverage" --results-directory ./coverage
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
+      - uses: codecov/codecov-action@v7
+        if: matrix.os == 'ubuntu-latest'
         with:
-          name: test-results
-          path: "**/*.trx"
+          directory: ./coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
-      - name: Format check
-        run: dotnet format --verify-no-changes --no-restore
+  pack:
+    name: Pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x'
+      - run: dotnet pack --configuration Release --output ./artifacts
+
+      # Packing is opt-in, and this is what proves it stayed that way: a test project or
+      # example that accidentally becomes packable shows up here and nowhere else.
+      - name: Assert the exact set of packages
+        run: |
+          set -euo pipefail
+          actual=$(cd artifacts && ls *.nupkg | sed 's/\.[0-9].*//' | sort | tr '\n' ' ')
+          expected="Rulebook Rulebook.Abstractions "
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Unexpected package set."
+            echo "expected: $expected"
+            echo "actual:   $actual"
+            exit 1
+          fi
+          test "$(ls artifacts/*.snupkg | wc -l)" -eq 2

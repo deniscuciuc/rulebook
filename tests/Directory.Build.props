@@ -1,0 +1,12 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- The docs-snippets project is a plain library, not a test project. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'Rulebook.Docs.Snippets'">
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

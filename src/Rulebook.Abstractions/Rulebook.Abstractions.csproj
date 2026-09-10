@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <Description>Contracts and definition models for Rulebook — rule expressions, decision contexts and results. Reference this to describe or accept decisions without pulling in the engine.</Description>
+        <PackageTags>rules;abstractions;feature-flags;ab-testing;segmentation</PackageTags>
+        <RootNamespace>Rulebook</RootNamespace>
+    </PropertyGroup>
+</Project>

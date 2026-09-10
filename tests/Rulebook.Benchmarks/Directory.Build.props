@@ -1,0 +1,8 @@
+<Project>
+    <!-- Skip tests/Directory.Build.props (Xunit) — import root directly -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..\..\'))"/>
+
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+</Project>

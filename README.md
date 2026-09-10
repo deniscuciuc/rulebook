@@ -1,108 +1,146 @@
-# DenisCuciuc.LibName
+# Rulebook
 
-> One sentence - what it does and why it exists.
+[![CI](https://github.com/deniscuciuc/rulebook/actions/workflows/ci.yml/badge.svg)](https://github.com/deniscuciuc/rulebook/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/Rulebook.svg?label=Rulebook)](https://www.nuget.org/packages/Rulebook/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/download/dotnet/10.0)
 
-Derived from `lib-template` for the shared repository files and extended here with
-.NET-specific build, test, packaging, and usage setup.
+> Rules, feature flags, segments and A/B tests in .NET — from one expression language.
 
-## Installation
+Write the condition once, as a string:
 
-Choose the distribution model that fits the repo.
-
-### NuGet (recommended for stable versions)
-
-```bash
-dotnet add package DenisCuciuc.LibName
+```
+user.tier == 'gold' && cart.total > 100
 ```
 
-### Git submodule (recommended during active development)
+Rulebook parses it, compiles it to a delegate, and evaluates it against whatever context you
+hand it. Feature flags, audience segments and A/B experiments are all the same rule with a
+different wrapper.
 
-```bash
-git submodule add https://github.com/deniscuciuc/dotnet-libname libs/dotnet-libname
 ```
-
-Then in your `.csproj` use a conditional reference so you can switch between
-local development and NuGet without changing the project file:
-
-```xml
-<Project>
-	<PropertyGroup>
-		<UseLocalLibs>false</UseLocalLibs>
-	</PropertyGroup>
-</Project>
+dotnet add package Rulebook
 ```
-
-```xml
-<ItemGroup Condition="'$(UseLocalLibs)' == 'true'">
-	<ProjectReference Include="libs/dotnet-libname/src/DenisCuciuc.LibName/DenisCuciuc.LibName.csproj" />
-</ItemGroup>
-
-<ItemGroup Condition="'$(UseLocalLibs)' != 'true'">
-	<PackageReference Include="DenisCuciuc.LibName" Version="0.1.0" />
-</ItemGroup>
-```
-
-In downstream apps, keep `UseLocalLibs` unset in CI so package restore uses NuGet.
-For local development, put `UseLocalLibs=true` in an untracked `Directory.Build.local.props`.
-The template's own example project already follows this pattern and defaults to a
-local project reference when the source tree exists.
-
-## Quick start
 
 ```csharp
-using DenisCuciuc.LibName;
-
-var message = LibraryMessage.Create("platform team");
-Console.WriteLine(message);
+builder.Services.AddDecisions();
+builder.Services.AddDecisionDefinitions(builder.Configuration);
 ```
 
-## Why this exists
+```json
+{
+  "Rulebook": {
+    "FeatureFlags": [
+      {
+        "Id": "new-checkout",
+        "Name": "New checkout",
+        "Rule": "user.tier == 'gold' && user.country == 'US'",
+        "RolloutPercentage": 25
+      }
+    ]
+  }
+}
+```
 
-Explain the problem this library solves, why the built-in alternatives were not enough, and when someone should pick it over a bespoke implementation.
+```csharp
+public sealed class CheckoutService(
+    IDecisionEngine engine,
+    IDecisionDefinitionProvider definitions)
+{
+    public async Task<bool> UseNewCheckoutAsync(User user, CancellationToken cancellationToken)
+    {
+        var flags = await definitions.GetFeatureFlagsAsync(cancellationToken);
+        var flag = flags.Single(f => f.Id == "new-checkout");
 
-## Features
+        var context = new DictionaryDecisionContext(new Dictionary<string, object?>
+        {
+            ["user.tier"] = user.Tier,
+            ["user.country"] = user.Country,
+            ["subject.id"] = user.Id,
+        });
 
-- Multi-targets .NET 8 and .NET 9.
-- Ships with nullable reference types, XML docs, and warnings-as-errors enabled.
-- Works both as a NuGet package and as source checked in via git submodule.
+        var result = await engine.EvaluateFeatureFlagAsync(flag, context, cancellationToken);
+        return result.IsMatch;
+    }
+}
+```
 
-## Template structure
+Change the rule in configuration and the next evaluation uses it — no restart, no deploy.
+A rule that does not parse throws on first use and names the definition, rather than
+quietly evaluating to false.
 
-Shared from `lib-template`:
+## What you get
 
-- `LICENSE`
-- `CONTRIBUTING.md`
-- `CHANGELOG.md`
-- `CLAs/signed.md`
-- `.github/pull_request_template.md`
-- `.github/ISSUE_TEMPLATE/*`
-- `.github/workflows/secret-scan.yml`
+| | |
+|---|---|
+| **Rules** | A small boolean DSL — `==` `!=` `>` `<` `>=` `<=` `in` `not in` `contains` `starts_with` `ends_with`, `&&`, `\|\|`, `!`, parentheses. Parsed to an AST, compiled to a delegate, cached. |
+| **Feature flags** | A rule plus a rollout percentage. |
+| **Segments** | A named rule. Ask which segments a subject falls into. |
+| **A/B tests** | Deterministic bucketing — `XxHash32("{experimentId}:{subjectId}")`, weighted variants, optional salt. The same subject always lands in the same variant, with no stored state and no coordination between instances. |
+| **Custom operators** | Register your own; the registry is open. |
 
-Specific to `dotnet-lib-template`:
+## Context
 
-- `src/`
-- `tests/`
-- `examples/`
-- `.editorconfig`
-- `Directory.Build.props`
-- `global.json`
-- `.github/workflows/ci.yml`
-- `.github/workflows/release.yml`
+A decision is evaluated against an `IDecisionContext`, which resolves dotted paths. Nothing
+about the shape of your data is baked in.
+
+```csharp
+var context = new DictionaryDecisionContext(new Dictionary<string, object?>
+{
+    ["player.level"] = 25,
+    ["player.country"] = "US",
+    ["subject.id"] = "user-42",
+});
+```
+
+There is a synchronous fast path (`TryGetValue`) and an async fallback (`GetValueAsync`) for
+values that have to be fetched. `CompositeDecisionContext` layers several sources.
+
+## Definitions from anywhere
+
+`AddDecisionDefinitions(IConfiguration)` reads from configuration through `IOptionsMonitor`,
+so any reloadable source gives hot reload. To load from a database or a feature-flag service
+instead, implement `IDecisionDefinitionProvider` and register it:
+
+```csharp
+services.AddDecisionDefinitionProvider<MyDefinitionProvider>();
+```
+
+Registration is `TryAdd`, so yours wins over the built-in one regardless of order.
+
+## Packages
+
+| Package | What you get |
+|---|---|
+| [`Rulebook`](https://www.nuget.org/packages/Rulebook/) | The engine: parser, compiler, operators, contexts, evaluators, definition sources |
+| [`Rulebook.Abstractions`](https://www.nuget.org/packages/Rulebook.Abstractions/) | Contracts and definition models, with no dependencies. Reference this from a project that describes decisions without evaluating them. |
 
 ## Documentation
 
-Add package documentation in `/docs` or the repository wiki as the API stabilizes.
+- [Getting started](docs/getting-started.md)
+- [Expressions](docs/expressions.md) — the rule language
+- [Context](docs/context.md)
+- [Feature flags](docs/feature-flags.md)
+- [Segmentation](docs/segmentation.md)
+- [A/B testing](docs/ab-testing.md)
+- [Extensibility](docs/extensibility.md) — custom operators and definition sources
+- [Architecture](docs/architecture.md)
+- [Release process](docs/release-process.md)
 
-## Release model
+A runnable example lives in [`examples/Rulebook.Examples.Console`](examples/Rulebook.Examples.Console),
+and there are BenchmarkDotNet suites in [`tests/Rulebook.Benchmarks`](tests/Rulebook.Benchmarks).
 
-CI always builds, tests, and format-checks the repository. Publishing is manual.
+## Versioning
 
-- Use the `Release` GitHub Actions workflow when you actually want to pack or publish.
-- The workflow always produces `.nupkg` artifacts.
-- NuGet publishing is opt-in through a workflow input instead of automatic on tag push.
-- GitHub Release creation is also opt-in.
+[Semantic versioning](https://semver.org/). Both packages are versioned and released
+together. Breaking changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
+Targets **net10.0**. Building from source needs the **.NET 10 SDK**.
+
+## Contributing
+
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md),
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and [SECURITY.md](SECURITY.md).
 
 ## License
 
-[PolyForm Strict](LICENSE) - source visible, commercial use requires permission.
-Contact: <denis@deniscuciuc.dev>
+[MIT](LICENSE)
