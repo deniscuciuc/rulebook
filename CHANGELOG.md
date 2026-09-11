@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-11
+
+### Changed
+
+- Dependencies brought current: `Microsoft.Extensions.*` 10.0.12, `NSubstitute` 6.2.0,
+  `Microsoft.NET.Test.Sdk` 18.10.0, `xunit.runner.visualstudio` 4.0.0,
+  `coverlet.collector` 10.0.1.
+
 ## [1.0.0] - 2026-09-11
 
 Initial release. A boolean expression DSL compiled to delegates, with feature flags,
@@ -64,5 +72,6 @@ experiments from the `Rulebook` section, with each rule written as an expression
 the caching path, custom providers, and the two failure modes (a rule that does not parse,
 and a definition with no rule at all).
 
-[Unreleased]: https://github.com/deniscuciuc/rulebook/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/deniscuciuc/rulebook/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/deniscuciuc/rulebook/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/deniscuciuc/rulebook/releases/tag/v1.0.0
