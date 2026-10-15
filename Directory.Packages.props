@@ -16,7 +16,7 @@
     </ItemGroup>
 
     <ItemGroup Label="Third-party">
-        <PackageVersion Include="System.IO.Hashing" Version="10.0.12" />
+        <PackageVersion Include="System.IO.Hashing" Version="10.0.13" />
     </ItemGroup>
 
     <ItemGroup Label="Build">
